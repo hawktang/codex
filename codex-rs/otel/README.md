@@ -110,7 +110,10 @@ The event excludes skill contents, descriptions, resource paths, email addresses
 prompts, tool arguments, and tool output. It reports detected use, not successful
 task completion. Shell-based implicit detection is best effort and is deduplicated
 per skill within a turn; explicit injection and later implicit access are distinct
-events. Skill-tool reads retain their existing invocation behavior.
+events. Successful skill-tool reads of the first page of a main resource emit
+implicit invocation logs before analytics reducer deduplication, so repeated reads
+can produce repeated logs. See [skill invocation counts](../analytics/README.md)
+for the separate analytics event contract and counts of unique turns using a skill.
 
 Skill events use the existing OTEL log exporter and are included automatically
 when `otel.exporter` points to an OTLP HTTP or gRPC destination. The default
