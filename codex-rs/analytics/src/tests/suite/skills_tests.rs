@@ -163,6 +163,125 @@ async fn reducer_ingests_skill_invoked_fact() {
 }
 
 #[tokio::test]
+async fn reducer_preserves_explicit_and_implicit_resource_skill_invocations() {
+    let mut reducer = AnalyticsReducer::default();
+    let mut events = Vec::new();
+
+    for (turn_id, skill_name, resource_id, skill_id, invocation_type) in [
+        (
+            "turn-1",
+            "doc",
+            "resource-doc",
+            "doc-id",
+            InvocationType::Explicit,
+        ),
+        (
+            "turn-1",
+            "doc",
+            "resource-doc",
+            "doc-id",
+            InvocationType::Implicit,
+        ),
+        (
+            "turn-1",
+            "doc",
+            "resource-doc",
+            "doc-id",
+            InvocationType::Implicit,
+        ),
+        (
+            "turn-1",
+            "lint",
+            "resource-lint",
+            "lint-id",
+            InvocationType::Implicit,
+        ),
+        (
+            "turn-2",
+            "doc",
+            "resource-doc",
+            "doc-id",
+            InvocationType::Implicit,
+        ),
+    ] {
+        reducer
+            .ingest(
+                AnalyticsFact::Custom(CustomAnalyticsFact::SkillInvoked(SkillInvokedInput {
+                    tracking: test_tracking_context("thread-1", turn_id),
+                    invocations: vec![SkillInvocation {
+                        skill_name: skill_name.to_string(),
+                        location: SkillInvocationLocation::Resource {
+                            id: resource_id.to_string(),
+                            skill_id: Some(skill_id.to_string()),
+                            scope: None,
+                        },
+                        plugin_id: None,
+                        remote_plugin_id: None,
+                        invocation_type,
+                    }],
+                })),
+                &mut events,
+            )
+            .await;
+    }
+
+    let payload = serde_json::to_value(&events).expect("serialize events");
+    let invocations: Vec<_> = payload
+        .as_array()
+        .expect("event array")
+        .iter()
+        .map(|event| {
+            json!([
+                event["event_type"],
+                event["skill_id"],
+                event["skill_name"],
+                event["event_params"]["thread_id"],
+                event["event_params"]["turn_id"],
+                event["event_params"]["invoke_type"],
+            ])
+        })
+        .collect();
+
+    assert_eq!(
+        invocations,
+        vec![
+            json!([
+                "skill_invocation",
+                "doc-id",
+                "doc",
+                "thread-1",
+                "turn-1",
+                "explicit"
+            ]),
+            json!([
+                "skill_invocation",
+                "doc-id",
+                "doc",
+                "thread-1",
+                "turn-1",
+                "implicit"
+            ]),
+            json!([
+                "skill_invocation",
+                "lint-id",
+                "lint",
+                "thread-1",
+                "turn-1",
+                "implicit"
+            ]),
+            json!([
+                "skill_invocation",
+                "doc-id",
+                "doc",
+                "thread-1",
+                "turn-2",
+                "implicit"
+            ]),
+        ]
+    );
+}
+
+#[tokio::test]
 async fn reducer_includes_plugin_ids_for_plugin_skill_invocations() {
     let mut reducer = AnalyticsReducer::default();
     let mut events = Vec::new();
